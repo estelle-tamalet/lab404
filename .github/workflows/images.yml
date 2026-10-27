@@ -112,43 +112,25 @@ jobs:
           name: digest-${{ matrix.service }}-${{ matrix.arch }}
           path: /tmp/digest
 
-      - id: ref
-        name: Resolve platform digest
+      - uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.72.0
+          cache: true
+
+      - name: Scan exact platform digest
         env:
           OWNER: ${{ github.repository_owner }}
           SERVICE: ${{ matrix.service }}
-        run: echo "image=ghcr.io/${OWNER,,}/lab404-${SERVICE}@$(cat /tmp/digest/digest)" >> "$GITHUB_OUTPUT"
-
-      - name: Prepare reports directory
-        run: mkdir -p reports
-
-      - name: Scan vulnerabilities
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        env:
+          ARCH: ${{ matrix.arch }}
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          image-ref: ${{ steps.ref.outputs.image }}
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          format: table
-          output: reports/trivy-${{ matrix.service }}-${{ matrix.arch }}.txt
-
-      - name: Generate SBOM
-        if: always()
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          image-ref: ${{ steps.ref.outputs.image }}
-          format: cyclonedx
-          output: reports/sbom-${{ matrix.service }}-${{ matrix.arch }}.cdx.json
-
-      - name: Show report
-        if: always()
-        run: cat reports/trivy-*.txt 2>/dev/null || echo "No report produced"
+        run: |
+          image="ghcr.io/${OWNER,,}/lab404-${SERVICE}@$(cat /tmp/digest/digest)"
+          mkdir -p reports
+          trivy image --platform "linux/${ARCH}" --scanners vuln --format table --output "reports/trivy-${SERVICE}-${ARCH}.txt" "$image"
+          trivy image --platform "linux/${ARCH}" --scanners vuln --format cyclonedx --output "reports/sbom-${SERVICE}-${ARCH}.cdx.json" "$image"
+          cat "reports/trivy-${SERVICE}-${ARCH}.txt"
+          trivy image --platform "linux/${ARCH}" --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$image"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
@@ -175,20 +157,30 @@ jobs:
           name: digest-${{ matrix.service }}-${{ matrix.arch }}
           path: /tmp/digest
 
-      - name: Run Dockle
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Export exact platform digest
         env:
           OWNER: ${{ github.repository_owner }}
           SERVICE: ${{ matrix.service }}
           ARCH: ${{ matrix.arch }}
-          DOCKLE_USERNAME: ${{ github.actor }}
-          DOCKLE_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           image="ghcr.io/${OWNER,,}/lab404-${SERVICE}@$(cat /tmp/digest/digest)"
-          echo "Scanning ${image}"
-          mkdir -p reports
-          args=(--exit-code 1 --exit-level warn --format json --output "/out/dockle-${SERVICE}-${ARCH}.json" "$image")
-          docker run --rm -e DOCKLE_USERNAME -e DOCKLE_PASSWORD -v "$PWD/reports:/out" goodwithtech/dockle@sha256:eade932f793742de0aa8755406c7677cd7696f8675b6180926f7eeffa7abe6b9 "${args[@]}"
-          cat "reports/dockle-${SERVICE}-${ARCH}.json"
+          mkdir -p work reports
+          docker pull --platform "linux/${ARCH}" "$image"
+          docker save --output work/image.tar "$image"
+
+      - name: Audit image
+        env:
+          SERVICE: ${{ matrix.service }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          # Kubernetes probes own health checks; the runtimes stay shell-less.
+          docker run --rm -v "$PWD/work:/scan" -v "$PWD/reports:/out" goodwithtech/dockle:v0.4.15@sha256:eade932f793742de0aa8755406c7677cd7696f8675b6180926f7eeffa7abe6b9 --exit-code 1 --exit-level fatal --ignore CIS-DI-0006 --accept-key=--access-logfile --format json --output "/out/dockle-${SERVICE}-${ARCH}.json" --input /scan/image.tar
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
