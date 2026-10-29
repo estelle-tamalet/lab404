@@ -5,8 +5,8 @@ resources:
 images:
   - name: ghcr.io/leofvo/lab404-web
     newName: ghcr.io/estelle-tamalet/lab404-web
-    newTag: latest
+    digest: sha256:211f0e6afa0ffe4b0064bc545d0f84bae97b0c290696c86300c2c0cdd728f93d
   - name: ghcr.io/leofvo/lab404-votes
     newName: ghcr.io/estelle-tamalet/lab404-votes
-    newTag: latest
+    digest: sha256:92fbc6d7da77fdd743a363e0f5f7ee5e0969f035670199e4d20ece1ffc9f1153
 
