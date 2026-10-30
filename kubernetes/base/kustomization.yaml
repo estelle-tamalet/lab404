@@ -10,3 +10,4 @@ resources:
   - nginx.yaml
   - networkpolicy-default-deny.yaml
   - networkpolicy-allow.yaml
+  - valkey-sealedsecret.yaml
