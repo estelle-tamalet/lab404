@@ -40,3 +40,9 @@ helmCharts:
     releaseName: sealed-secrets-controller
     namespace: kube-system
     includeCRDs: true
+  - name: falco
+    repo: https://falcosecurity.github.io/charts
+    version: 9.2.2
+    releaseName: falco
+    namespace: falco
+    valuesFile: falco-values.yaml
