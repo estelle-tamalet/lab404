@@ -8,3 +8,5 @@ resources:
   - valkey.yaml
   - gateway.yaml
   - nginx.yaml
+  - networkpolicy-default-deny.yaml
+  - networkpolicy-allow.yaml
